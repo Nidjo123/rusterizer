@@ -50,9 +50,10 @@ impl Drawable for Image {
 
         if x0 > x1 {
             std::mem::swap(&mut x0, &mut x1);
+            std::mem::swap(&mut y0, &mut y1);
         }
 
-        let dx = (x1 - x0 + 1) as i32;
+        let dx = (x1 - x0) as i32;
         let dy = y1 as i32 - y0 as i32;
 
         let derror2 = dy.abs() * 2;
@@ -66,7 +67,7 @@ impl Drawable for Image {
             }
             error2 += derror2;
             if error2 > dx {
-                y += dy.signum() * 1;
+                y += dy.signum();
                 error2 -= dx * 2;
             }
         }
