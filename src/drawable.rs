@@ -2,11 +2,25 @@ use crate::color::Color;
 use image::{ImageResult, RgbImage};
 use std::path::Path;
 
+pub struct Point<T> {
+    x: T,
+    y: T,
+}
+
+impl<T> Point<T> {
+    pub fn new(x: T, y: T) -> Self {
+        Point { x, y }
+    }
+}
+
+pub type ScreenPoint = Point<u32>;
+
 pub trait Drawable {
     fn width(&self) -> u32;
     fn height(&self) -> u32;
     fn clear(&mut self, color: Color);
     fn line(&mut self, x0: u32, y0: u32, x1: u32, y1: u32, color: Color);
+    fn triangle(&mut self, u: &ScreenPoint, v: &ScreenPoint, w: &ScreenPoint, color: Color);
 }
 
 pub struct Image {
@@ -74,4 +88,51 @@ impl Drawable for Image {
             }
         }
     }
+
+    fn triangle(&mut self, u: &ScreenPoint, v: &ScreenPoint, w: &ScreenPoint, color: Color) {
+        let mut points = [u, v, w];
+        points.sort_by_key(|p| p.y);
+        let min_y = points[0].y;
+        let max_y = points[2].y;
+
+        for y in min_y..=max_y {
+            let x0 = intersect_y(points[0], points[2], y);
+            let x1 = if y <= points[1].y {
+                intersect_y(points[0], points[1], y)
+            } else {
+                intersect_y(points[1], points[2], y)
+            };
+            let left_x = x0.min(x1).ceil() as u32;
+            let right_x = x0.max(x1) as u32;
+            self.line(left_x, y, right_x, y, color);
+        }
+
+        let line_color = Color(255, 50, 255);
+        self.line(u.x, u.y, v.x, v.y, line_color);
+        self.line(v.x, v.y, w.x, w.y, line_color);
+        self.line(u.x, u.y, w.x, w.y, line_color);
+    }
+}
+
+fn intersect_y(p1: &ScreenPoint, p2: &ScreenPoint, y: u32) -> f64 {
+    if p1.x == p2.x {
+        return p1.x as f64;
+    }
+    let x1 = p1.x as f64;
+    let y1 = p1.y as f64;
+    let x2 = p2.x as f64;
+    let y2 = p2.y as f64;
+    let delta = (y2 - y1) / (x2 - x1);
+    (y as f64 - y1) / delta + x1
+}
+
+#[test]
+fn test_intersect_y() {
+    let p1 = ScreenPoint::new(5, 10);
+    let p2 = ScreenPoint::new(5, 20);
+    assert_eq!(intersect_y(&p1, &p2, 15), 5.0);
+
+    let p1 = ScreenPoint::new(5, 10);
+    let p2 = ScreenPoint::new(20, 20);
+    assert_eq!(intersect_y(&p1, &p2, 15), 12.5);
 }

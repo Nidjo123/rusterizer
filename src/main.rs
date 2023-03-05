@@ -47,6 +47,14 @@ fn main() {
     image.clear(Color(50, 50, 50));
 
     let white = Color(255, 255, 255);
+    let blue = Color(0, 0, 255);
+    let p1 = drawable::ScreenPoint::new(100, 100);
+    let p2 = drawable::ScreenPoint::new(300, 150);
+    let p3 = drawable::ScreenPoint::new(30, 400);
+    image.triangle(&p1, &p2, &p3, white);
+
+    let p4 = drawable::ScreenPoint::new(400, 100);
+    image.triangle(&p1, &p2, &p4, blue);
 
     let obj_path = std::env::args().skip(1).next();
     if let Some(path) = obj_path {
