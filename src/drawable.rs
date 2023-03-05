@@ -1,6 +1,6 @@
-use std::path::Path;
-use image::{ImageResult, RgbImage};
 use crate::color::Color;
+use image::{ImageResult, RgbImage};
+use std::path::Path;
 
 pub trait Drawable {
     fn width(&self) -> u32;
@@ -15,7 +15,9 @@ pub struct Image {
 
 impl Image {
     pub fn new(width: u32, height: u32) -> Image {
-        Image { image: RgbImage::new(width, height) }
+        Image {
+            image: RgbImage::new(width, height),
+        }
     }
 
     pub fn save<Q: AsRef<Path>>(&self, path: Q) -> ImageResult<()> {

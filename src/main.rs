@@ -1,6 +1,6 @@
-use wavefront_obj::obj::Primitive;
-use drawable::Image;
 use color::Color;
+use drawable::Image;
+use wavefront_obj::obj::Primitive;
 
 mod color;
 mod drawable;
@@ -15,9 +15,7 @@ fn draw_obj_wireframe(image: &mut Image, obj: &wavefront_obj::obj::Object, color
             match shape.primitive {
                 Primitive::Point(_) => {}
                 Primitive::Line(_, _) => {}
-                Primitive::Triangle((idx1, _, _),
-                                    (idx2, _, _),
-                                    (idx3, _, _)) => {
+                Primitive::Triangle((idx1, _, _), (idx2, _, _), (idx3, _, _)) => {
                     let v1 = &obj.vertices[idx1];
                     let v2 = &obj.vertices[idx2];
                     let v3 = &obj.vertices[idx3];
@@ -29,11 +27,13 @@ fn draw_obj_wireframe(image: &mut Image, obj: &wavefront_obj::obj::Object, color
                         let y0 = (-u.y + 1.0) * height as f64 / 2.0;
                         let x1 = (v.x + 1.0) * width as f64 / 2.0;
                         let y1 = (-v.y + 1.0) * height as f64 / 2.0;
-                        image.line((x0 as u32).min(width - 1),
-                                   (y0 as u32).min(height - 1),
-                                   (x1 as u32).min(width - 1),
-                                   (y1 as u32).min(height - 1),
-                                   color);
+                        image.line(
+                            (x0 as u32).min(width - 1),
+                            (y0 as u32).min(height - 1),
+                            (x1 as u32).min(width - 1),
+                            (y1 as u32).min(height - 1),
+                            color,
+                        );
                     }
                 }
             }
