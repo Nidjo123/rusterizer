@@ -129,6 +129,20 @@ impl Drawable for Image {
     }
 }
 
+#[allow(unused)]
+fn triangle_wireframe(
+    image: &mut Image,
+    u: &ScreenPoint,
+    v: &ScreenPoint,
+    w: &ScreenPoint,
+    color: Color,
+) {
+    image.line(u.x, u.y, v.x, v.y, color);
+    image.line(v.x, v.y, w.x, w.y, color);
+    image.line(u.x, u.y, w.x, w.y, color);
+}
+
+#[allow(unused)]
 fn triangle_line_sweep(
     image: &mut Image,
     u: &ScreenPoint,
@@ -152,11 +166,6 @@ fn triangle_line_sweep(
         let right_x = x0.max(x1) as u32;
         image.line(left_x, y, right_x, y, color);
     }
-
-    let line_color = Color(255, 50, 255);
-    image.line(u.x, u.y, v.x, v.y, line_color);
-    image.line(v.x, v.y, w.x, w.y, line_color);
-    image.line(u.x, u.y, w.x, w.y, line_color);
 }
 
 fn triangle_barycentric(
@@ -177,11 +186,6 @@ fn triangle_barycentric(
             }
         }
     }
-
-    let line_color = Color(255, 50, 255);
-    image.line(u.x, u.y, v.x, v.y, line_color);
-    image.line(v.x, v.y, w.x, w.y, line_color);
-    image.line(u.x, u.y, w.x, w.y, line_color);
 }
 
 fn barycentric(
