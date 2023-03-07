@@ -8,14 +8,16 @@ pub struct Point<T> {
     y: T,
 }
 
+impl<T> Point<T> {
+    pub fn new(x: T, y: T) -> Self {
+        Point { x, y }
+    }
+}
+
 impl<T> Point<T>
 where
     T: Copy + Ord,
 {
-    pub fn new(x: T, y: T) -> Self {
-        Point { x, y }
-    }
-
     pub fn min(&self, other: &Point<T>) -> Self {
         Point {
             x: self.x.min(other.x),
