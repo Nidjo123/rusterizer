@@ -50,7 +50,14 @@ pub trait Drawable {
     fn clear(&mut self, color: Color);
     fn point(&mut self, x: u32, y: u32, color: Color);
     fn line(&mut self, x0: u32, y0: u32, x1: u32, y1: u32, color: Color);
-    fn triangle(&mut self, u: &ScreenPoint, v: &ScreenPoint, w: &ScreenPoint, color: Color);
+    fn triangle(
+        &mut self,
+        u: &ScreenPoint,
+        v: &ScreenPoint,
+        w: &ScreenPoint,
+        color: Color,
+        wireframe_only: bool,
+    );
 }
 
 pub struct Image {
@@ -89,6 +96,7 @@ impl Drawable for Image {
     }
 
     fn line(&mut self, mut x0: u32, mut y0: u32, mut x1: u32, mut y1: u32, color: Color) {
+        // TODO: clip inside drawable bounds
         let steep;
         if x0.abs_diff(x1) < y0.abs_diff(y1) {
             steep = true;
@@ -123,9 +131,20 @@ impl Drawable for Image {
         }
     }
 
-    fn triangle(&mut self, u: &ScreenPoint, v: &ScreenPoint, w: &ScreenPoint, color: Color) {
-        // triangle_line_sweep(self, u, v, w, color);
-        triangle_barycentric(self, u, v, w, color);
+    fn triangle(
+        &mut self,
+        u: &ScreenPoint,
+        v: &ScreenPoint,
+        w: &ScreenPoint,
+        color: Color,
+        wireframe_only: bool,
+    ) {
+        if wireframe_only {
+            triangle_wireframe(self, u, v, w, color);
+        } else {
+            // triangle_line_sweep(self, u, v, w, color);
+            triangle_barycentric(self, u, v, w, color);
+        }
     }
 }
 
@@ -177,6 +196,11 @@ fn triangle_barycentric(
 ) {
     let min_p = u.min(v).min(w);
     let max_p = u.max(v).max(w);
+
+    let width = image.width();
+    let height = image.height();
+    let min_p = ScreenPoint::new(min_p.x.min(width - 1), min_p.y.min(height - 1));
+    let max_p = ScreenPoint::new(max_p.x.min(width - 1), max_p.y.min(height - 1));
 
     for y in min_p.y..=max_p.y {
         for x in min_p.x..=max_p.x {

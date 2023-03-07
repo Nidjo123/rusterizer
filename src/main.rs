@@ -5,37 +5,45 @@ use wavefront_obj::obj::Primitive;
 mod color;
 mod drawable;
 
-use drawable::Drawable;
+use crate::drawable::{Drawable, ScreenPoint};
 
-fn draw_obj_wireframe(image: &mut Image, obj: &wavefront_obj::obj::Object, color: Color) {
-    let width = image.width();
-    let height = image.height();
+enum DrawStyle {
+    Wireframe,
+    Filled(Color),
+    FilledRandom,
+}
+
+fn draw_obj(image: &mut Image, obj: &wavefront_obj::obj::Object, draw_style: DrawStyle) {
     for geometry in &obj.geometry {
         for shape in &geometry.shapes {
             match shape.primitive {
-                Primitive::Point(_) => {}
-                Primitive::Line(_, _) => {}
                 Primitive::Triangle((idx1, _, _), (idx2, _, _), (idx3, _, _)) => {
                     let v1 = &obj.vertices[idx1];
                     let v2 = &obj.vertices[idx2];
                     let v3 = &obj.vertices[idx3];
-                    let vertices = [v1, v2, v3];
-                    for i in 0..vertices.len() {
-                        let u = vertices[i];
-                        let v = vertices[(i + 1) % vertices.len()];
-                        let x0 = (u.x + 1.0) * width as f64 / 2.0;
-                        let y0 = (-u.y + 1.0) * height as f64 / 2.0;
-                        let x1 = (v.x + 1.0) * width as f64 / 2.0;
-                        let y1 = (-v.y + 1.0) * height as f64 / 2.0;
-                        image.line(
-                            (x0 as u32).min(width - 1),
-                            (y0 as u32).min(height - 1),
-                            (x1 as u32).min(width - 1),
-                            (y1 as u32).min(height - 1),
-                            color,
-                        );
-                    }
+                    let scale_x = image.width() as f64 / 2.0;
+                    let scale_y = image.height() as f64 / 2.0;
+                    let transform_component = |x, offset, scale| ((x + offset) * scale) as u32;
+                    let x1 = transform_component(v1.x, 1.0, scale_x);
+                    let y1 = transform_component(-v1.y, 1.0, scale_y);
+                    let x2 = transform_component(v2.x, 1.0, scale_x);
+                    let y2 = transform_component(-v2.y, 1.0, scale_y);
+                    let x3 = transform_component(v3.x, 1.0, scale_x);
+                    let y3 = transform_component(-v3.y, 1.0, scale_y);
+                    let color = match draw_style {
+                        DrawStyle::Wireframe => Color(255, 255, 255),
+                        DrawStyle::Filled(color) => color,
+                        DrawStyle::FilledRandom => Color::random(),
+                    };
+                    image.triangle(
+                        &ScreenPoint::new(x1, y1),
+                        &ScreenPoint::new(x2, y2),
+                        &ScreenPoint::new(x3, y3),
+                        color,
+                        matches!(draw_style, DrawStyle::Wireframe),
+                    );
                 }
+                _ => {}
             }
         }
     }
@@ -46,22 +54,12 @@ fn main() {
 
     image.clear(Color(50, 50, 50));
 
-    let white = Color(255, 255, 255);
-    let blue = Color(0, 0, 255);
-    let p1 = drawable::ScreenPoint::new(100, 100);
-    let p2 = drawable::ScreenPoint::new(300, 150);
-    let p3 = drawable::ScreenPoint::new(30, 400);
-    image.triangle(&p1, &p2, &p3, white);
-
-    let p4 = drawable::ScreenPoint::new(400, 100);
-    image.triangle(&p1, &p2, &p4, blue);
-
     let obj_path = std::env::args().skip(1).next();
     if let Some(path) = obj_path {
         if let Ok(content) = std::fs::read_to_string(path) {
             let obj_set = wavefront_obj::obj::parse(content).expect("obj parsing error");
             for obj in &obj_set.objects {
-                draw_obj_wireframe(&mut image, obj, white);
+                draw_obj(&mut image, obj, DrawStyle::FilledRandom);
             }
         }
     }
