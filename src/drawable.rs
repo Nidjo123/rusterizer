@@ -212,7 +212,8 @@ fn is_point_inside_triangle(
     p: &ScreenPoint,
 ) -> bool {
     let (a, b, c) = barycentric(p1, p2, p3, p);
-    a >= 0.0 && b >= 0.0 && c >= 0.0
+    const LIMIT: f64 = 1e-9;
+    a >= -LIMIT && b >= -LIMIT && c >= -LIMIT
 }
 
 #[test]
