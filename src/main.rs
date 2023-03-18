@@ -24,6 +24,8 @@ fn calculate_intensity(v1: &Vertex, v2: &Vertex, v3: &Vertex, light_dir: &Vec3f)
 
 fn draw_obj(image: &mut Image, obj: &Object, draw_style: DrawStyle) {
     let light_dir = Vec3f::new(0., 0., -1.);
+    let scale_x = image.width() as f64 / 2.0;
+    let scale_y = image.height() as f64 / 2.0;
     for geometry in &obj.geometry {
         for shape in &geometry.shapes {
             match shape.primitive {
@@ -31,8 +33,11 @@ fn draw_obj(image: &mut Image, obj: &Object, draw_style: DrawStyle) {
                     let v1 = &obj.vertices[idx1];
                     let v2 = &obj.vertices[idx2];
                     let v3 = &obj.vertices[idx3];
-                    let scale_x = image.width() as f64 / 2.0;
-                    let scale_y = image.height() as f64 / 2.0;
+                    let intensity = calculate_intensity(v1, v2, v3, &light_dir);
+                    if intensity < 0.0 {
+                        // not visible
+                        continue;
+                    }
                     let transform_component = |x, offset, scale| ((x + offset) * scale) as u32;
                     let x1 = transform_component(v1.x, 1.0, scale_x);
                     let y1 = transform_component(-v1.y, 1.0, scale_y);
@@ -40,11 +45,6 @@ fn draw_obj(image: &mut Image, obj: &Object, draw_style: DrawStyle) {
                     let y2 = transform_component(-v2.y, 1.0, scale_y);
                     let x3 = transform_component(v3.x, 1.0, scale_x);
                     let y3 = transform_component(-v3.y, 1.0, scale_y);
-                    let intensity = calculate_intensity(v1, v2, v3, &light_dir);
-                    if intensity < 0.0 {
-                        // not visible
-                        continue;
-                    }
                     let color = match draw_style {
                         DrawStyle::Wireframe => Color(255, 255, 255),
                         DrawStyle::Filled(color) => color.scale(intensity),
