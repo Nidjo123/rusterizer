@@ -1,48 +1,101 @@
-use crate::color::Color;
-use image::{ImageResult, RgbImage};
 use std::path::Path;
+
+use image::{ImageResult, RgbImage};
+
+use crate::color::Color;
 
 #[derive(Debug)]
 pub struct Point<T> {
     x: T,
     y: T,
+    z: T,
 }
 
 impl<T> Point<T> {
-    pub fn new(x: T, y: T) -> Self {
-        Point { x, y }
+    pub fn new(x: T, y: T, z: T) -> Self {
+        Point { x, y, z }
+    }
+}
+
+fn min<T: PartialOrd>(a: T, b: T) -> T {
+    if a < b {
+        a
+    } else {
+        b
+    }
+}
+
+fn max<T: PartialOrd>(a: T, b: T) -> T {
+    if a > b {
+        a
+    } else {
+        b
     }
 }
 
 impl<T> Point<T>
 where
-    T: Copy + Ord,
+    T: Copy + PartialOrd,
 {
     pub fn min(&self, other: &Point<T>) -> Self {
         Point {
-            x: self.x.min(other.x),
-            y: self.y.min(other.y),
+            x: min(self.x, other.x),
+            y: min(self.y, other.y),
+            z: min(self.z, other.z),
         }
     }
 
     pub fn max(&self, other: &Point<T>) -> Self {
         Point {
-            x: self.x.max(other.x),
-            y: self.y.max(other.y),
+            x: max(self.x, other.x),
+            y: max(self.y, other.y),
+            z: max(self.z, other.z),
         }
     }
 }
 
-impl From<&ScreenPoint> for Point<f64> {
+impl From<&ScreenPoint> for Point3f {
     fn from(point: &ScreenPoint) -> Self {
         Point {
             x: point.x as f64,
             y: point.y as f64,
+            z: point.z as f64,
+        }
+    }
+}
+
+impl From<ScreenPoint> for Point3f {
+    fn from(point: ScreenPoint) -> Self {
+        Point {
+            x: point.x as f64,
+            y: point.y as f64,
+            z: point.z as f64,
+        }
+    }
+}
+
+impl From<&Point3f> for ScreenPoint {
+    fn from(point: &Point3f) -> Self {
+        Point {
+            x: point.x as u32,
+            y: point.y as u32,
+            z: point.z as u32,
+        }
+    }
+}
+
+impl From<Point3f> for ScreenPoint {
+    fn from(point: Point3f) -> Self {
+        Point {
+            x: point.x as u32,
+            y: point.y as u32,
+            z: point.z as u32,
         }
     }
 }
 
 pub type ScreenPoint = Point<u32>;
+pub type Point3f = Point<f64>;
 
 pub trait Drawable {
     fn width(&self) -> u32;
@@ -52,22 +105,25 @@ pub trait Drawable {
     fn line(&mut self, x0: u32, y0: u32, x1: u32, y1: u32, color: Color);
     fn triangle(
         &mut self,
-        u: &ScreenPoint,
-        v: &ScreenPoint,
-        w: &ScreenPoint,
+        u: &Point3f,
+        v: &Point3f,
+        w: &Point3f,
         color: Color,
         wireframe_only: bool,
     );
+    fn check_and_set_zbuf(&mut self, x: u32, y: u32, z_value: f64) -> bool;
 }
 
 pub struct Image {
     image: RgbImage,
+    z_buffer: Vec<f64>,
 }
 
 impl Image {
     pub fn new(width: u32, height: u32) -> Image {
         Image {
             image: RgbImage::new(width, height),
+            z_buffer: vec![f64::NEG_INFINITY; (width * height) as usize],
         }
     }
 
@@ -133,17 +189,27 @@ impl Drawable for Image {
 
     fn triangle(
         &mut self,
-        u: &ScreenPoint,
-        v: &ScreenPoint,
-        w: &ScreenPoint,
+        u: &Point3f,
+        v: &Point3f,
+        w: &Point3f,
         color: Color,
         wireframe_only: bool,
     ) {
         if wireframe_only {
-            triangle_wireframe(self, u, v, w, color);
+            triangle_wireframe(self, &u.into(), &v.into(), &w.into(), color);
         } else {
             // triangle_line_sweep(self, u, v, w, color);
             triangle_barycentric(self, u, v, w, color);
+        }
+    }
+
+    fn check_and_set_zbuf(&mut self, x: u32, y: u32, z_value: f64) -> bool {
+        let idx = (y * self.height() + x) as usize;
+        if self.z_buffer[idx] < z_value {
+            self.z_buffer[idx] = z_value;
+            true
+        } else {
+            false
         }
     }
 }
@@ -187,99 +253,43 @@ fn triangle_line_sweep(
     }
 }
 
-fn triangle_barycentric(
-    image: &mut Image,
-    u: &ScreenPoint,
-    v: &ScreenPoint,
-    w: &ScreenPoint,
-    color: Color,
-) {
-    let min_p = u.min(v).min(w);
-    let max_p = u.max(v).max(w);
+const LIMIT: f64 = 1e-9;
+
+fn triangle_barycentric(image: &mut Image, u: &Point3f, v: &Point3f, w: &Point3f, color: Color) {
+    let min_p: ScreenPoint = ScreenPoint::from(u.min(v).min(w));
+    let max_p: ScreenPoint = ScreenPoint::from(u.max(v).max(w));
 
     let width = image.width();
     let height = image.height();
-    let min_p = ScreenPoint::new(min_p.x.min(width - 1), min_p.y.min(height - 1));
-    let max_p = ScreenPoint::new(max_p.x.min(width - 1), max_p.y.min(height - 1));
+    let min_p = ScreenPoint::new(min_p.x.min(width - 1), min_p.y.min(height - 1), min_p.z);
+    let max_p = ScreenPoint::new(max_p.x.min(width - 1), max_p.y.min(height - 1), max_p.z);
 
     for y in min_p.y..=max_p.y {
         for x in min_p.x..=max_p.x {
-            let p = ScreenPoint::new(x, y);
-            if is_point_inside_triangle(u, v, w, &p) {
-                image.point(x, y, color);
+            let p = ScreenPoint::new(x, y, 0).into();
+            let (a, b, c) = barycentric(&u, &v, &w, &p);
+            if a >= -LIMIT && b >= -LIMIT && c >= -LIMIT {
+                let z = a * u.z + b * v.z + c * w.z;
+                if image.check_and_set_zbuf(x, y, z) {
+                    image.point(x, y, color);
+                }
             }
         }
     }
 }
 
-fn barycentric(
-    p1: &ScreenPoint,
-    p2: &ScreenPoint,
-    p3: &ScreenPoint,
-    p: &ScreenPoint,
-) -> (f64, f64, f64) {
-    let p1: Point<f64> = p1.into();
-    let p2: Point<f64> = p2.into();
-    let p3: Point<f64> = p3.into();
-    let p: Point<f64> = p.into();
-
+fn barycentric(p1: &Point3f, p2: &Point3f, p3: &Point3f, p: &Point3f) -> (f64, f64, f64) {
     let denom = (p1.x - p3.x) * (p2.y - p3.y) - (p1.y - p3.y) * (p2.x - p3.x);
     let lambda1 = ((p.x - p3.x) * (p2.y - p3.y) + (p3.x - p2.x) * (p.y - p3.y)) / denom;
     let lambda2 = ((p3.x - p.x) * (p1.y - p3.y) + (p3.x - p1.x) * (p3.y - p.y)) / denom;
     (lambda1, lambda2, 1.0 - lambda1 - lambda2)
 }
 
-fn is_point_inside_triangle(
-    p1: &ScreenPoint,
-    p2: &ScreenPoint,
-    p3: &ScreenPoint,
-    p: &ScreenPoint,
-) -> bool {
-    let (a, b, c) = barycentric(p1, p2, p3, p);
-    const LIMIT: f64 = 1e-9;
-    a >= -LIMIT && b >= -LIMIT && c >= -LIMIT
-}
-
-#[test]
-fn test_is_point_inside_triangle() {
-    let p1 = ScreenPoint::new(5, 5);
-    let p2 = ScreenPoint::new(10, 5);
-    let p3 = ScreenPoint::new(10, 7);
-    assert!(is_point_inside_triangle(&p1, &p2, &p3, &p1));
-    assert!(is_point_inside_triangle(&p1, &p2, &p3, &p2));
-    assert!(is_point_inside_triangle(&p1, &p2, &p3, &p3));
-    assert!(is_point_inside_triangle(
-        &p1,
-        &p2,
-        &p3,
-        &ScreenPoint::new(8, 6)
-    ));
-
-    assert!(!is_point_inside_triangle(
-        &p1,
-        &p2,
-        &p3,
-        &ScreenPoint::new(5, 4)
-    ));
-    assert!(!is_point_inside_triangle(
-        &p1,
-        &p2,
-        &p3,
-        &ScreenPoint::new(100, 100)
-    ));
-    assert!(!is_point_inside_triangle(
-        &p1,
-        &p2,
-        &p3,
-        &ScreenPoint::new(5, 7)
-    ));
-}
-
 #[test]
 fn test_barycentric() {
-    let p1 = ScreenPoint::new(5, 5);
-    let p2 = ScreenPoint::new(10, 5);
-    let p3 = ScreenPoint::new(10, 7);
+    let p1 = ScreenPoint::new(5, 5, 0);
+    let p2 = ScreenPoint::new(10, 5, 0);
+    let p3 = ScreenPoint::new(10, 7, 0);
 
     fn close_enough(res: (f64, f64, f64), ref_vals: (f64, f64, f64)) -> bool {
         const EPS: f64 = 1e-6;
@@ -300,7 +310,7 @@ fn test_barycentric() {
         (0.0, 0.0, 1.0)
     ));
 
-    let outside = ScreenPoint::new(100, 100);
+    let outside = ScreenPoint::new(100, 100, 0);
     let (a, b, c) = barycentric(&p1, &p2, &p3, &outside);
     assert!([a, b, c].iter().any(|&x| x < 0.0));
 }
@@ -319,11 +329,11 @@ fn intersect_y(p1: &ScreenPoint, p2: &ScreenPoint, y: u32) -> f64 {
 
 #[test]
 fn test_intersect_y() {
-    let p1 = ScreenPoint::new(5, 10);
-    let p2 = ScreenPoint::new(5, 20);
+    let p1 = ScreenPoint::new(5, 10, 0);
+    let p2 = ScreenPoint::new(5, 20, 0);
     assert_eq!(intersect_y(&p1, &p2, 15), 5.0);
 
-    let p1 = ScreenPoint::new(5, 10);
-    let p2 = ScreenPoint::new(20, 20);
+    let p1 = ScreenPoint::new(5, 10, 0);
+    let p2 = ScreenPoint::new(20, 20, 0);
     assert_eq!(intersect_y(&p1, &p2, 15), 12.5);
 }

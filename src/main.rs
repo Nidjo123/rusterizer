@@ -1,14 +1,16 @@
+use wavefront_obj::obj::{Object, Primitive, Vertex};
+
 use color::Color;
 use drawable::Image;
-use wavefront_obj::obj::{Object, Primitive, Vertex};
+use math::Vec3f;
+
+use crate::drawable::{Drawable, Point3f};
 
 mod color;
 mod drawable;
 mod math;
 
-use crate::drawable::{Drawable, ScreenPoint};
-use math::Vec3f;
-
+#[allow(unused)]
 enum DrawStyle {
     Wireframe,
     Filled(Color),
@@ -38,7 +40,7 @@ fn draw_obj(image: &mut Image, obj: &Object, draw_style: DrawStyle) {
                         // not visible
                         continue;
                     }
-                    let transform_component = |x, offset, scale| ((x + offset) * scale) as u32;
+                    let transform_component = |x, offset, scale| -> f64 { (x + offset) * scale };
                     let x1 = transform_component(v1.x, 1.0, scale_x);
                     let y1 = transform_component(-v1.y, 1.0, scale_y);
                     let x2 = transform_component(v2.x, 1.0, scale_x);
@@ -51,9 +53,9 @@ fn draw_obj(image: &mut Image, obj: &Object, draw_style: DrawStyle) {
                         DrawStyle::FilledRandom => Color::random().scale(intensity),
                     };
                     image.triangle(
-                        &ScreenPoint::new(x1, y1),
-                        &ScreenPoint::new(x2, y2),
-                        &ScreenPoint::new(x3, y3),
+                        &Point3f::new(x1, y1, v1.z),
+                        &Point3f::new(x2, y2, v2.z),
+                        &Point3f::new(x3, y3, v3.z),
                         color,
                         matches!(draw_style, DrawStyle::Wireframe),
                     );
