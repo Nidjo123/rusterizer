@@ -23,4 +23,10 @@ impl Into<Rgb<u8>> for Color {
     }
 }
 
+impl From<Rgb<u8>> for Color {
+    fn from(value: Rgb<u8>) -> Self {
+        Color(value[0], value[1], value[2])
+    }
+}
+
 pub const WHITE: Color = Color(255, 255, 255);

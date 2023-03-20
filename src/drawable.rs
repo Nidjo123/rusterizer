@@ -3,6 +3,7 @@ use std::path::Path;
 use image::{ImageResult, RgbImage};
 
 use crate::color::Color;
+use crate::DrawStyle;
 
 #[derive(Debug)]
 pub struct Point<T> {
@@ -105,11 +106,11 @@ pub trait Drawable {
     fn line(&mut self, x0: u32, y0: u32, x1: u32, y1: u32, color: Color);
     fn triangle(
         &mut self,
-        u: &Point3f,
-        v: &Point3f,
-        w: &Point3f,
-        color: Color,
-        wireframe_only: bool,
+        a: &Point3f,
+        b: &Point3f,
+        c: &Point3f,
+        draw_style: &DrawStyle,
+        intensity: f64,
     );
     fn check_and_set_zbuf(&mut self, x: u32, y: u32, z_value: f64) -> bool;
 }
@@ -128,7 +129,9 @@ impl Image {
     }
 
     pub fn save<Q: AsRef<Path>>(&self, path: Q) -> ImageResult<()> {
-        self.image.save(path)
+        image::DynamicImage::from(self.image.clone())
+            .flipv()
+            .save(path)
     }
 }
 
@@ -189,18 +192,18 @@ impl Drawable for Image {
 
     fn triangle(
         &mut self,
-        u: &Point3f,
-        v: &Point3f,
-        w: &Point3f,
-        color: Color,
-        wireframe_only: bool,
+        a: &Point3f,
+        b: &Point3f,
+        c: &Point3f,
+        draw_style: &DrawStyle,
+        intensity: f64,
     ) {
-        if wireframe_only {
-            triangle_wireframe(self, &u.into(), &v.into(), &w.into(), color);
-        } else {
-            // triangle_line_sweep(self, u, v, w, color);
-            triangle_barycentric(self, u, v, w, color);
-        }
+        match draw_style {
+            &DrawStyle::Wireframe(color) => {
+                triangle_wireframe(self, &a.into(), &b.into(), &c.into(), color)
+            }
+            _ => triangle_barycentric(self, a, b, c, draw_style, intensity),
+        };
     }
 
     fn check_and_set_zbuf(&mut self, x: u32, y: u32, z_value: f64) -> bool {
@@ -255,9 +258,33 @@ fn triangle_line_sweep(
 
 const LIMIT: f64 = 1e-9;
 
-fn triangle_barycentric(image: &mut Image, u: &Point3f, v: &Point3f, w: &Point3f, color: Color) {
-    let min_p: ScreenPoint = ScreenPoint::from(u.min(v).min(w));
-    let max_p: ScreenPoint = ScreenPoint::from(u.max(v).max(w));
+fn determine_color(bary_coords: (f64, f64, f64), draw_style: &DrawStyle, intensity: f64) -> Color {
+    match draw_style {
+        &DrawStyle::Textured(tex, (tp1, tp2, tp3)) => {
+            let (a, b, c) = bary_coords;
+            let u = a * tp1.x + b * tp2.x + c * tp3.x;
+            let v = a * tp1.y + b * tp2.y + c * tp3.y;
+            let x = (u * tex.width() as f64) as u32;
+            let y = (v * tex.height() as f64) as u32;
+            let color = tex.get_pixel(x, y);
+            Color::from(*color).scale(intensity)
+        }
+        DrawStyle::Filled(color) => color.scale(intensity),
+        DrawStyle::FilledRandom => Color::random().scale(intensity),
+        DrawStyle::Wireframe(_) => panic!("should not end here"),
+    }
+}
+
+fn triangle_barycentric(
+    image: &mut Image,
+    p1: &Point3f,
+    p2: &Point3f,
+    p3: &Point3f,
+    draw_style: &DrawStyle,
+    intensity: f64,
+) {
+    let min_p: ScreenPoint = ScreenPoint::from(p1.min(p2).min(p3));
+    let max_p: ScreenPoint = ScreenPoint::from(p1.max(p2).max(p3));
 
     let width = image.width();
     let height = image.height();
@@ -267,10 +294,11 @@ fn triangle_barycentric(image: &mut Image, u: &Point3f, v: &Point3f, w: &Point3f
     for y in min_p.y..=max_p.y {
         for x in min_p.x..=max_p.x {
             let p = ScreenPoint::new(x, y, 0).into();
-            let (a, b, c) = barycentric(&u, &v, &w, &p);
+            let (a, b, c) = barycentric(&p1, &p2, &p3, &p);
             if a >= -LIMIT && b >= -LIMIT && c >= -LIMIT {
-                let z = a * u.z + b * v.z + c * w.z;
+                let z = a * p1.z + b * p2.z + c * p3.z;
                 if image.check_and_set_zbuf(x, y, z) {
+                    let color = determine_color((a, b, c), draw_style, intensity);
                     image.point(x, y, color);
                 }
             }
@@ -287,9 +315,9 @@ fn barycentric(p1: &Point3f, p2: &Point3f, p3: &Point3f, p: &Point3f) -> (f64, f
 
 #[test]
 fn test_barycentric() {
-    let p1 = ScreenPoint::new(5, 5, 0);
-    let p2 = ScreenPoint::new(10, 5, 0);
-    let p3 = ScreenPoint::new(10, 7, 0);
+    let p1 = Point3f::new(5., 5., 0.);
+    let p2 = Point3f::new(10., 5., 0.);
+    let p3 = Point3f::new(10., 7., 0.);
 
     fn close_enough(res: (f64, f64, f64), ref_vals: (f64, f64, f64)) -> bool {
         const EPS: f64 = 1e-6;
@@ -310,7 +338,7 @@ fn test_barycentric() {
         (0.0, 0.0, 1.0)
     ));
 
-    let outside = ScreenPoint::new(100, 100, 0);
+    let outside = Point3f::new(100., 100., 0.);
     let (a, b, c) = barycentric(&p1, &p2, &p3, &outside);
     assert!([a, b, c].iter().any(|&x| x < 0.0));
 }
